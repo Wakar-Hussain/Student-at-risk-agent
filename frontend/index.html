@@ -146,7 +146,9 @@ ul.act li { margin: 6px 0; }
 <main id="app"></main>
 
 <script>
-const API_URL = "http://127.0.0.1:5000";
+const API_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:') 
+  ? "http://127.0.0.1:5000" 
+  : "https://student-at-risk-agent.vercel.app";
 
 const D = {
   "students": [
