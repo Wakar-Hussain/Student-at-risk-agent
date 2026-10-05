@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import csv
 from pathlib import Path
@@ -7,273 +7,322 @@ app = Flask(__name__)
 CORS(app)
 
 DATA_FILE = Path(__file__).resolve().parent / "student_risk_analytics_noheader.csv"
-FIELDS = [
-    "student_id",
-    "avg_attendance",
-    "attended_classes",
-    "total_classes",
-    "assignment_completion_percentage",
-    "avg_assignment_completion",
-    "avg_assignment_score",
-    "submitted_assignments",
-    "total_assignments",
-    "internal_marks",
-    "avg_internal_marks",
-    "avg_midterm_marks",
-    "avg_final_exam_marks",
-    "avg_total_marks",
-    "previous_gpa",
-    "study_hours_per_day",
-    "total_study_hours",
-    "total_sleep_hours",
-    "total_library_hours",
-    "total_self_study_hours",
-    "total_distraction_hours",
-    "total_practice_questions",
-    "avg_study_consistency",
-    "total_logins",
-    "total_video_minutes",
-    "total_resources_viewed",
-    "total_quiz_attempts",
-    "total_forum_posts",
-    "total_session_minutes",
-    "risk_level"
+
+# Comprehensive EduRisk dataset definition
+EDURISK_DATA = {
+    "subjects": [
+        "Big Data Analytics",
+        "Computer Networks",
+        "Database Management",
+        "Machine Learning",
+        "Operating Systems"
+    ],
+    "metrics": [
+        {"model": "Logistic Regression", "accuracy": 0.899, "precision_at_risk": 0.667, "recall_at_risk": 0.706, "f1_weighted": 0.9, "auc": 0.963},
+        {"model": "Decision Tree", "accuracy": 0.89, "precision_at_risk": 0.778, "recall_at_risk": 0.412, "f1_weighted": 0.875, "auc": 0.738},
+        {"model": "Random Forest", "accuracy": 0.936, "precision_at_risk": 0.812, "recall_at_risk": 0.765, "f1_weighted": 0.935, "auc": 0.962}
+    ],
+    "importance": [
+        {"feature": "avg_internal", "importance": 0.2639392490197011},
+        {"feature": "avg_practice_questions", "importance": 0.1704408767656449},
+        {"feature": "assignment_score", "importance": 0.1562278915091206},
+        {"feature": "previous_gpa", "importance": 0.1099381674039999},
+        {"feature": "avg_attendance", "importance": 0.0509368540902568},
+        {"feature": "lms_quiz_attempts", "importance": 0.0440669672355894},
+        {"feature": "avg_study_hours", "importance": 0.0335459407863056},
+        {"feature": "lms_logins", "importance": 0.0325372058444228},
+        {"feature": "min_attendance", "importance": 0.028513273957742},
+        {"feature": "lms_video_minutes", "importance": 0.0223934321535142}
+    ]
+}
+
+# Embedded EduRisk Students dataset
+STUDENTS = [
+  {"student_id":"STU00006","name":"Student_6","department":"Computer Science","semester":3,"performance_score":45.56,"performance_band":"Poor","avg_attendance":69.27,"cgpa":1.6,"assignment_completion":64.09,"avg_internal":16.2,"lms_logins":38,"avg_study_hours":2.2,"avg_distraction_hours":3.18,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.948,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Failing/at-risk subject; arrange remedial classes for Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[75.0,62.5,75.0,69.6,64.3],"mk":[41,36,23,36,41]},
+  {"student_id":"STU00012","name":"Student_12","department":"Civil","semester":1,"performance_score":74.48,"performance_band":"Good","avg_attendance":79.41,"cgpa":7.2,"assignment_completion":76.16,"avg_internal":28.2,"lms_logins":51,"avg_study_hours":4.64,"avg_distraction_hours":2.84,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[81.1,78.6,73.5,84.8,79.2],"mk":[75,79,64,84,66]},
+  {"student_id":"STU00029","name":"Student_29","department":"Information Technology","semester":6,"performance_score":76.34,"performance_band":"Good","avg_attendance":76.25,"cgpa":8.0,"assignment_completion":72.55,"avg_internal":28.8,"lms_logins":68,"avg_study_hours":4.01,"avg_distraction_hours":2.4,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.007,"recommended_actions":"No action needed","att":[81.6,84.1,68.6,75.5,71.4],"mk":[77,74,70,80,72]},
+  {"student_id":"STU00039","name":"Student_39","department":"Information Technology","semester":2,"performance_score":38.35,"performance_band":"Poor","avg_attendance":54.78,"cgpa":2.0,"assignment_completion":54.5,"avg_internal":13.6,"lms_logins":22,"avg_study_hours":0.92,"avg_distraction_hours":3.82,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.91,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[47.7,55.3,60.0,57.5,53.3],"mk":[56,27,23,43,21]},
+  {"student_id":"STU00042","name":"Student_42","department":"Information Technology","semester":3,"performance_score":68.13,"performance_band":"Good","avg_attendance":73.05,"cgpa":6.4,"assignment_completion":72.75,"avg_internal":26.4,"lms_logins":45,"avg_study_hours":3.4,"avg_distraction_hours":2.56,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.023,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics","att":[59.1,67.6,80.5,79.0,79.2],"mk":[63,72,64,66,68]},
+  {"student_id":"STU00044","name":"Student_44","department":"Mechanical","semester":1,"performance_score":73.28,"performance_band":"Good","avg_attendance":80.28,"cgpa":7.2,"assignment_completion":75.83,"avg_internal":27.4,"lms_logins":61,"avg_study_hours":4.01,"avg_distraction_hours":2.44,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.054,"recommended_actions":"No action needed","att":[71.1,86.5,80.0,79.6,84.2],"mk":[55,70,72,68,74]},
+  {"student_id":"STU00049","name":"Student_49","department":"Electronics","semester":3,"performance_score":86.23,"performance_band":"Excellent","avg_attendance":90.23,"cgpa":8.8,"assignment_completion":90.78,"avg_internal":31.2,"lms_logins":82,"avg_study_hours":5.78,"avg_distraction_hours":2.26,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[95.7,78.6,87.2,92.3,97.4],"mk":[72,89,80,92,71]},
+  {"student_id":"STU00052","name":"Student_52","department":"Information Technology","semester":4,"performance_score":78.71,"performance_band":"Good","avg_attendance":88.07,"cgpa":7.2,"assignment_completion":84.77,"avg_internal":29.8,"lms_logins":76,"avg_study_hours":4.67,"avg_distraction_hours":2.13,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[85.7,87.2,95.0,89.1,83.3],"mk":[78,66,84,77,58]},
+  {"student_id":"STU00053","name":"Student_53","department":"Civil","semester":8,"performance_score":61.32,"performance_band":"Average","avg_attendance":76.43,"cgpa":4.8,"assignment_completion":71.43,"avg_internal":22.0,"lms_logins":35,"avg_study_hours":3.15,"avg_distraction_hours":2.75,"subjects_failed":1,"final_risk":"High","ml_risk_probability":0.048,"recommended_actions":"Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[84.2,71.4,65.0,86.5,75.0],"mk":[63,65,62,59,38]},
+  {"student_id":"STU00056","name":"Student_56","department":"Electronics","semester":8,"performance_score":61.16,"performance_band":"Average","avg_attendance":78.78,"cgpa":4.8,"assignment_completion":67.73,"avg_internal":21.2,"lms_logins":36,"avg_study_hours":3.4,"avg_distraction_hours":2.77,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.236,"recommended_actions":"CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[81.8,70.3,87.5,80.5,73.8],"mk":[54,66,57,43,43]},
+  {"student_id":"STU00070","name":"Student_70","department":"Computer Science","semester":2,"performance_score":72.34,"performance_band":"Good","avg_attendance":74.92,"cgpa":7.2,"assignment_completion":79.32,"avg_internal":29.0,"lms_logins":71,"avg_study_hours":3.83,"avg_distraction_hours":2.15,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.023,"recommended_actions":"Attendance low; counsel student, focus on Database Management","att":[79.6,74.3,64.6,78.6,77.6],"mk":[76,81,59,66,71]},
+  {"student_id":"STU00091","name":"Student_91","department":"Civil","semester":7,"performance_score":65.46,"performance_band":"Good","avg_attendance":69.78,"cgpa":6.4,"assignment_completion":69.83,"avg_internal":26.0,"lms_logins":40,"avg_study_hours":2.98,"avg_distraction_hours":2.77,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.073,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Low LMS engagement; encourage use of online resources","att":[63.2,78.7,69.2,71.1,66.7],"mk":[73,63,63,67,60]},
+  {"student_id":"STU00093","name":"Student_93","department":"Computer Science","semester":6,"performance_score":79.68,"performance_band":"Good","avg_attendance":88.21,"cgpa":7.2,"assignment_completion":86.33,"avg_internal":29.6,"lms_logins":109,"avg_study_hours":5.76,"avg_distraction_hours":1.47,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[90.2,84.0,90.7,85.4,90.7],"mk":[78,58,81,64,72]},
+  {"student_id":"STU00102","name":"Student_102","department":"Civil","semester":1,"performance_score":81.4,"performance_band":"Excellent","avg_attendance":80.85,"cgpa":8.8,"assignment_completion":82.92,"avg_internal":32.6,"lms_logins":58,"avg_study_hours":4.16,"avg_distraction_hours":1.93,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[95.4,81.1,75.0,77.3,75.6],"mk":[90,82,74,80,86]},
+  {"student_id":"STU00112","name":"Student_112","department":"Mechanical","semester":7,"performance_score":78.03,"performance_band":"Good","avg_attendance":83.13,"cgpa":7.6,"assignment_completion":87.9,"avg_internal":29.0,"lms_logins":65,"avg_study_hours":3.99,"avg_distraction_hours":2.58,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.028,"recommended_actions":"No action needed","att":[88.0,76.0,84.6,83.3,83.7],"mk":[82,84,86,68,66]},
+  {"student_id":"STU00124","name":"Student_124","department":"Computer Science","semester":2,"performance_score":79.0,"performance_band":"Good","avg_attendance":76.57,"cgpa":8.0,"assignment_completion":85.23,"avg_internal":31.6,"lms_logins":67,"avg_study_hours":4.25,"avg_distraction_hours":2.36,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[75.7,69.6,87.0,73.9,76.7],"mk":[78,74,69,80,88]},
+  {"student_id":"STU00126","name":"Student_126","department":"Electronics","semester":5,"performance_score":68.51,"performance_band":"Good","avg_attendance":75.79,"cgpa":6.4,"assignment_completion":69.17,"avg_internal":27.2,"lms_logins":49,"avg_study_hours":3.58,"avg_distraction_hours":3.03,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.023,"recommended_actions":"No action needed","att":[87.0,71.1,73.2,70.4,77.3],"mk":[60,67,69,82,65]},
+  {"student_id":"STU00127","name":"Student_127","department":"Mechanical","semester":1,"performance_score":75.09,"performance_band":"Good","avg_attendance":80.22,"cgpa":7.2,"assignment_completion":76.55,"avg_internal":29.8,"lms_logins":51,"avg_study_hours":4.87,"avg_distraction_hours":1.93,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[69.4,80.4,78.6,77.8,94.9],"mk":[54,80,73,83,81]},
+  {"student_id":"STU00137","name":"Student_137","department":"Information Technology","semester":1,"performance_score":72.23,"performance_band":"Good","avg_attendance":79.02,"cgpa":6.8,"assignment_completion":74.65,"avg_internal":28.4,"lms_logins":58,"avg_study_hours":3.38,"avg_distraction_hours":2.62,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[82.9,83.3,76.1,81.4,71.4],"mk":[64,72,57,71,69]},
+  {"student_id":"STU00139","name":"Student_139","department":"Mechanical","semester":5,"performance_score":90.28,"performance_band":"Excellent","avg_attendance":94.49,"cgpa":8.8,"assignment_completion":93.46,"avg_internal":35.0,"lms_logins":115,"avg_study_hours":5.81,"avg_distraction_hours":2.36,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[91.3,94.9,90.9,100.0,95.4],"mk":[73,95,81,100,77]},
+  {"student_id":"STU00145","name":"Student_145","department":"Information Technology","semester":4,"performance_score":58.74,"performance_band":"Average","avg_attendance":71.63,"cgpa":4.4,"assignment_completion":65.7,"avg_internal":23.0,"lms_logins":45,"avg_study_hours":3.0,"avg_distraction_hours":2.76,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.054,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | CGPA below 6; assign faculty mentor","att":[73.5,61.0,75.0,75.0,73.7],"mk":[53,47,47,53,63]},
+  {"student_id":"STU00148","name":"Student_148","department":"Information Technology","semester":5,"performance_score":49.89,"performance_band":"Poor","avg_attendance":62.56,"cgpa":3.6,"assignment_completion":60.18,"avg_internal":19.2,"lms_logins":24,"avg_study_hours":2.27,"avg_distraction_hours":3.28,"subjects_failed":1,"final_risk":"High","ml_risk_probability":0.829,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[73.5,54.8,59.6,62.2,62.9],"mk":[47,52,59,38,45]},
+  {"student_id":"STU00151","name":"Student_151","department":"Electronics","semester":6,"performance_score":84.71,"performance_band":"Excellent","avg_attendance":95.44,"cgpa":8.0,"assignment_completion":92.78,"avg_internal":30.0,"lms_logins":114,"avg_study_hours":5.49,"avg_distraction_hours":0.97,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[89.1,95.4,95.0,100.0,97.7],"mk":[65,85,76,72,76]},
+  {"student_id":"STU00160","name":"Student_160","department":"Electronics","semester":1,"performance_score":50.73,"performance_band":"Average","avg_attendance":68.39,"cgpa":2.8,"assignment_completion":64.99,"avg_internal":18.0,"lms_logins":40,"avg_study_hours":3.53,"avg_distraction_hours":2.85,"subjects_failed":2,"final_risk":"High","ml_risk_probability":0.731,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Failing/at-risk subject; arrange remedial classes for Computer Networks | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[75.0,66.7,66.7,72.1,61.5],"mk":[48,30,38,46,62]},
+  {"student_id":"STU00169","name":"Student_169","department":"Information Technology","semester":6,"performance_score":65.32,"performance_band":"Good","avg_attendance":72.11,"cgpa":6.0,"assignment_completion":69.33,"avg_internal":27.0,"lms_logins":44,"avg_study_hours":3.1,"avg_distraction_hours":2.48,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.041,"recommended_actions":"Attendance low; counsel student, focus on Database Management","att":[76.6,81.4,60.0,69.4,73.2],"mk":[53,68,82,52,71]},
+  {"student_id":"STU00201","name":"Student_201","department":"Civil","semester":1,"performance_score":86.08,"performance_band":"Excellent","avg_attendance":93.59,"cgpa":8.4,"assignment_completion":93.18,"avg_internal":31.6,"lms_logins":99,"avg_study_hours":5.17,"avg_distraction_hours":1.53,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[100.0,90.7,87.2,98.0,92.0],"mk":[85,73,75,76,77]},
+  {"student_id":"STU00202","name":"Student_202","department":"Civil","semester":6,"performance_score":82.36,"performance_band":"Excellent","avg_attendance":89.95,"cgpa":8.0,"assignment_completion":81.62,"avg_internal":32.4,"lms_logins":81,"avg_study_hours":4.41,"avg_distraction_hours":2.28,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[91.4,91.7,91.4,86.1,89.1],"mk":[69,73,87,79,83]},
+  {"student_id":"STU00204","name":"Student_204","department":"Electronics","semester":6,"performance_score":79.58,"performance_band":"Good","avg_attendance":79.26,"cgpa":8.4,"assignment_completion":82.67,"avg_internal":29.8,"lms_logins":64,"avg_study_hours":4.12,"avg_distraction_hours":2.62,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[90.7,72.5,81.4,80.8,70.8],"mk":[60,73,87,88,71]},
+  {"student_id":"STU00205","name":"Student_205","department":"Civil","semester":3,"performance_score":62.75,"performance_band":"Average","avg_attendance":80.88,"cgpa":4.8,"assignment_completion":77.88,"avg_internal":20.6,"lms_logins":54,"avg_study_hours":3.67,"avg_distraction_hours":2.28,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.283,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[82.5,77.8,86.4,76.2,81.6],"mk":[51,47,70,40,40]},
+  {"student_id":"STU00210","name":"Student_210","department":"Electronics","semester":4,"performance_score":71.01,"performance_band":"Good","avg_attendance":84.09,"cgpa":6.0,"assignment_completion":82.92,"avg_internal":24.4,"lms_logins":56,"avg_study_hours":4.8,"avg_distraction_hours":1.93,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[91.8,90.0,79.0,86.5,73.2],"mk":[79,49,56,67,61]},
+  {"student_id":"STU00213","name":"Student_213","department":"Mechanical","semester":5,"performance_score":59.82,"performance_band":"Average","avg_attendance":76.02,"cgpa":4.4,"assignment_completion":59.73,"avg_internal":23.6,"lms_logins":37,"avg_study_hours":2.83,"avg_distraction_hours":3.08,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.066,"recommended_actions":"Assignments missing; send reminders and set weekly submission check-ins | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[76.9,70.8,72.5,76.1,83.8],"mk":[54,54,42,64,51]},
+  {"student_id":"STU00215","name":"Student_215","department":"Electronics","semester":2,"performance_score":64.11,"performance_band":"Average","avg_attendance":78.4,"cgpa":5.6,"assignment_completion":66.72,"avg_internal":21.2,"lms_logins":48,"avg_study_hours":3.41,"avg_distraction_hours":2.17,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.108,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[74.4,86.1,78.3,82.9,70.3],"mk":[62,51,58,57,62]},
+  {"student_id":"STU00218","name":"Student_218","department":"Civil","semester":1,"performance_score":88.76,"performance_band":"Excellent","avg_attendance":93.72,"cgpa":8.8,"assignment_completion":93.46,"avg_internal":31.8,"lms_logins":115,"avg_study_hours":4.99,"avg_distraction_hours":1.74,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[100.0,89.7,91.9,100.0,87.0],"mk":[96,90,70,79,77]},
+  {"student_id":"STU00219","name":"Student_219","department":"Mechanical","semester":1,"performance_score":65.33,"performance_band":"Good","avg_attendance":76.88,"cgpa":5.6,"assignment_completion":69.06,"avg_internal":24.2,"lms_logins":61,"avg_study_hours":3.44,"avg_distraction_hours":2.99,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.033,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[75.7,69.2,75.6,82.9,81.0],"mk":[72,44,58,52,63]},
+  {"student_id":"STU00220","name":"Student_220","department":"Information Technology","semester":8,"performance_score":49.91,"performance_band":"Poor","avg_attendance":70.42,"cgpa":2.8,"assignment_completion":61.89,"avg_internal":18.4,"lms_logins":39,"avg_study_hours":2.39,"avg_distraction_hours":3.42,"subjects_failed":2,"final_risk":"High","ml_risk_probability":0.924,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[75.0,67.4,71.4,70.8,67.4],"mk":[53,42,58,31,38]},
+  {"student_id":"STU00225","name":"Student_225","department":"Mechanical","semester":5,"performance_score":64.22,"performance_band":"Average","avg_attendance":72.05,"cgpa":6.0,"assignment_completion":66.17,"avg_internal":23.4,"lms_logins":45,"avg_study_hours":2.48,"avg_distraction_hours":2.77,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.059,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems","att":[68.6,75.0,74.5,81.1,61.1],"mk":[67,58,56,75,53]},
+  {"student_id":"STU00226","name":"Student_226","department":"Information Technology","semester":8,"performance_score":84.06,"performance_band":"Excellent","avg_attendance":93.56,"cgpa":7.6,"assignment_completion":96.11,"avg_internal":30.8,"lms_logins":96,"avg_study_hours":4.87,"avg_distraction_hours":1.74,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[95.4,93.0,100.0,85.7,93.6],"mk":[66,70,82,81,74]},
+  {"student_id":"STU00235","name":"Student_235","department":"Civil","semester":3,"performance_score":61.82,"performance_band":"Average","avg_attendance":75.79,"cgpa":4.8,"assignment_completion":73.73,"avg_internal":22.0,"lms_logins":62,"avg_study_hours":3.68,"avg_distraction_hours":2.26,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.124,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[76.6,78.4,73.7,81.2,69.0],"mk":[54,45,61,52,56]},
+  {"student_id":"STU00239","name":"Student_239","department":"Civil","semester":3,"performance_score":38.07,"performance_band":"Poor","avg_attendance":62.66,"cgpa":0.8,"assignment_completion":49.59,"avg_internal":13.6,"lms_logins":34,"avg_study_hours":1.35,"avg_distraction_hours":3.84,"subjects_failed":4,"final_risk":"High","ml_risk_probability":0.983,"recommended_actions":"Attendance low; counsel student, focus on Database Management | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[65.1,57.5,56.1,70.7,63.8],"mk":[39,32,29,54,23]},
+  {"student_id":"STU00243","name":"Student_243","department":"Mechanical","semester":8,"performance_score":39.96,"performance_band":"Poor","avg_attendance":60.1,"cgpa":1.6,"assignment_completion":59.83,"avg_internal":13.4,"lms_logins":42,"avg_study_hours":2.1,"avg_distraction_hours":4.3,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.952,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[73.7,51.4,54.3,60.0,61.1],"mk":[29,29,21,44,42]},
+  {"student_id":"STU00260","name":"Student_260","department":"Information Technology","semester":5,"performance_score":59.55,"performance_band":"Average","avg_attendance":71.43,"cgpa":4.0,"assignment_completion":81.77,"avg_internal":21.0,"lms_logins":53,"avg_study_hours":3.75,"avg_distraction_hours":2.58,"subjects_failed":1,"final_risk":"High","ml_risk_probability":0.769,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor","att":[84.0,60.0,65.9,75.0,72.2],"mk":[51,53,48,39,70]},
+  {"student_id":"STU00261","name":"Student_261","department":"Civil","semester":7,"performance_score":81.5,"performance_band":"Excellent","avg_attendance":91.78,"cgpa":7.6,"assignment_completion":86.39,"avg_internal":30.0,"lms_logins":84,"avg_study_hours":5.0,"avg_distraction_hours":1.8,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[97.7,88.9,89.7,89.7,92.9],"mk":[80,76,78,74,58]},
+  {"student_id":"STU00264","name":"Student_264","department":"Mechanical","semester":8,"performance_score":72.49,"performance_band":"Good","avg_attendance":82.72,"cgpa":6.8,"assignment_completion":79.59,"avg_internal":25.8,"lms_logins":71,"avg_study_hours":3.66,"avg_distraction_hours":2.35,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.018,"recommended_actions":"No action needed","att":[84.1,82.9,72.2,78.4,96.0],"mk":[70,72,46,77,63]},
+  {"student_id":"STU00281","name":"Student_281","department":"Civil","semester":3,"performance_score":74.96,"performance_band":"Good","avg_attendance":84.84,"cgpa":6.8,"assignment_completion":78.74,"avg_internal":28.0,"lms_logins":57,"avg_study_hours":4.5,"avg_distraction_hours":2.09,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[88.6,78.3,76.3,91.7,89.4],"mk":[83,68,76,66,67]},
+  {"student_id":"STU00305","name":"Student_305","department":"Civil","semester":1,"performance_score":78.3,"performance_band":"Good","avg_attendance":89.75,"cgpa":7.2,"assignment_completion":84.17,"avg_internal":26.4,"lms_logins":84,"avg_study_hours":5.09,"avg_distraction_hours":1.36,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[97.9,89.4,87.5,78.0,95.9],"mk":[66,70,80,62,78]},
+  {"student_id":"STU00309","name":"Student_309","department":"Information Technology","semester":8,"performance_score":74.29,"performance_band":"Good","avg_attendance":88.29,"cgpa":6.8,"assignment_completion":71.5,"avg_internal":26.2,"lms_logins":68,"avg_study_hours":3.91,"avg_distraction_hours":2.44,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.04,"recommended_actions":"No action needed","att":[84.1,91.4,84.6,98.0,83.3],"mk":[62,60,75,79,64]},
+  {"student_id":"STU00315","name":"Student_315","department":"Information Technology","semester":6,"performance_score":74.17,"performance_band":"Good","avg_attendance":78.58,"cgpa":7.6,"assignment_completion":73.05,"avg_internal":29.0,"lms_logins":59,"avg_study_hours":3.19,"avg_distraction_hours":2.5,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.018,"recommended_actions":"No action needed","att":[76.2,80.0,82.5,73.0,81.2],"mk":[71,68,79,71,79]},
+  {"student_id":"STU00319","name":"Student_319","department":"Civil","semester":2,"performance_score":84.98,"performance_band":"Excellent","avg_attendance":85.84,"cgpa":8.8,"assignment_completion":89.29,"avg_internal":32.2,"lms_logins":93,"avg_study_hours":4.84,"avg_distraction_hours":2.01,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[87.5,83.7,86.5,82.0,89.5],"mk":[73,74,71,89,90]},
+  {"student_id":"STU00321","name":"Student_321","department":"Mechanical","semester":1,"performance_score":72.39,"performance_band":"Good","avg_attendance":76.39,"cgpa":6.8,"assignment_completion":77.58,"avg_internal":27.0,"lms_logins":60,"avg_study_hours":3.71,"avg_distraction_hours":2.59,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.012,"recommended_actions":"No action needed","att":[77.8,72.7,74.5,74.0,83.0],"mk":[64,61,55,83,75]},
+  {"student_id":"STU00343","name":"Student_343","department":"Civil","semester":8,"performance_score":84.03,"performance_band":"Excellent","avg_attendance":94.41,"cgpa":8.0,"assignment_completion":88.0,"avg_internal":30.4,"lms_logins":119,"avg_study_hours":5.38,"avg_distraction_hours":1.62,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[100.0,85.7,94.9,93.6,97.8],"mk":[73,81,84,80,73]},
+  {"student_id":"STU00351","name":"Student_351","department":"Information Technology","semester":1,"performance_score":71.1,"performance_band":"Good","avg_attendance":76.99,"cgpa":6.8,"assignment_completion":72.03,"avg_internal":27.6,"lms_logins":60,"avg_study_hours":4.01,"avg_distraction_hours":2.87,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.007,"recommended_actions":"No action needed","att":[74.4,76.9,80.0,68.3,85.4],"mk":[52,65,68,91,76]},
+  {"student_id":"STU00357","name":"Student_357","department":"Civil","semester":1,"performance_score":74.48,"performance_band":"Good","avg_attendance":82.64,"cgpa":6.8,"assignment_completion":78.78,"avg_internal":27.4,"lms_logins":75,"avg_study_hours":4.56,"avg_distraction_hours":1.94,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[85.7,81.6,77.1,83.3,85.4],"mk":[78,62,60,74,69]},
+  {"student_id":"STU00385","name":"Student_385","department":"Electronics","semester":8,"performance_score":37.52,"performance_band":"Poor","avg_attendance":61.96,"cgpa":0.8,"assignment_completion":53.49,"avg_internal":12.6,"lms_logins":34,"avg_study_hours":1.95,"avg_distraction_hours":3.75,"subjects_failed":4,"final_risk":"High","ml_risk_probability":0.986,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[52.8,55.6,73.0,66.0,62.5],"mk":[40,39,28,29,34]},
+  {"student_id":"STU00391","name":"Student_391","department":"Electronics","semester":3,"performance_score":37.3,"performance_band":"Poor","avg_attendance":58.57,"cgpa":0.8,"assignment_completion":57.73,"avg_internal":14.4,"lms_logins":32,"avg_study_hours":1.02,"avg_distraction_hours":2.79,"subjects_failed":4,"final_risk":"High","ml_risk_probability":0.968,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[56.8,54.0,76.0,58.3,47.7],"mk":[34,39,43,34,32]},
+  {"student_id":"STU00403","name":"Student_403","department":"Civil","semester":6,"performance_score":82.69,"performance_band":"Excellent","avg_attendance":83.6,"cgpa":8.8,"assignment_completion":76.25,"avg_internal":32.4,"lms_logins":54,"avg_study_hours":4.08,"avg_distraction_hours":2.22,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[78.3,74.5,89.2,84.2,91.9],"mk":[74,86,81,80,90]},
+  {"student_id":"STU00418","name":"Student_418","department":"Civil","semester":8,"performance_score":90.8,"performance_band":"Excellent","avg_attendance":91.9,"cgpa":9.6,"assignment_completion":91.74,"avg_internal":33.8,"lms_logins":92,"avg_study_hours":4.57,"avg_distraction_hours":1.86,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[93.5,86.7,94.3,87.2,97.8],"mk":[85,81,87,92,93]},
+  {"student_id":"STU00424","name":"Student_424","department":"Information Technology","semester":7,"performance_score":48.11,"performance_band":"Poor","avg_attendance":68.4,"cgpa":2.4,"assignment_completion":66.45,"avg_internal":16.2,"lms_logins":42,"avg_study_hours":1.77,"avg_distraction_hours":3.25,"subjects_failed":2,"final_risk":"High","ml_risk_probability":0.93,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[63.8,70.3,75.7,71.1,61.1],"mk":[50,46,50,31,27]},
+  {"student_id":"STU00430","name":"Student_430","department":"Civil","semester":3,"performance_score":73.25,"performance_band":"Good","avg_attendance":82.81,"cgpa":6.8,"assignment_completion":75.24,"avg_internal":26.6,"lms_logins":57,"avg_study_hours":4.57,"avg_distraction_hours":1.86,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[72.3,83.8,77.3,85.4,95.2],"mk":[75,76,67,54,75]},
+  {"student_id":"STU00434","name":"Student_434","department":"Information Technology","semester":8,"performance_score":65.51,"performance_band":"Good","avg_attendance":90.72,"cgpa":4.4,"assignment_completion":82.5,"avg_internal":21.0,"lms_logins":79,"avg_study_hours":3.99,"avg_distraction_hours":1.86,"subjects_failed":1,"final_risk":"Medium","ml_risk_probability":0.666,"recommended_actions":"Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor","att":[97.7,90.2,91.7,80.0,94.0],"mk":[55,67,58,36,43]},
+  {"student_id":"STU00438","name":"Student_438","department":"Information Technology","semester":7,"performance_score":58.67,"performance_band":"Average","avg_attendance":75.9,"cgpa":4.0,"assignment_completion":73.88,"avg_internal":19.4,"lms_logins":46,"avg_study_hours":3.2,"avg_distraction_hours":2.11,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.347,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[80.0,71.7,76.3,71.4,80.0],"mk":[54,48,53,40,50]},
+  {"student_id":"STU00442","name":"Student_442","department":"Mechanical","semester":6,"performance_score":83.34,"performance_band":"Excellent","avg_attendance":88.81,"cgpa":8.0,"assignment_completion":86.14,"avg_internal":31.2,"lms_logins":89,"avg_study_hours":4.97,"avg_distraction_hours":1.28,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[84.8,91.7,87.2,82.9,97.5],"mk":[81,70,92,69,76]},
+  {"student_id":"STU00462","name":"Student_462","department":"Electronics","semester":1,"performance_score":61.29,"performance_band":"Average","avg_attendance":71.47,"cgpa":5.2,"assignment_completion":75.78,"avg_internal":21.6,"lms_logins":53,"avg_study_hours":3.39,"avg_distraction_hours":3.17,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.075,"recommended_actions":"Attendance low; counsel student, focus on Machine Learning | CGPA below 6; assign faculty mentor | High distraction time; time-management coaching","att":[75.0,68.3,72.0,65.1,76.9],"mk":[43,47,71,49,64]},
+  {"student_id":"STU00481","name":"Student_481","department":"Electronics","semester":5,"performance_score":76.02,"performance_band":"Good","avg_attendance":84.0,"cgpa":7.2,"assignment_completion":80.68,"avg_internal":29.4,"lms_logins":69,"avg_study_hours":4.51,"avg_distraction_hours":2.14,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[71.4,83.3,83.0,89.6,92.7],"mk":[67,69,71,72,83]},
+  {"student_id":"STU00490","name":"Student_490","department":"Civil","semester":5,"performance_score":71.66,"performance_band":"Good","avg_attendance":78.0,"cgpa":6.8,"assignment_completion":72.67,"avg_internal":27.4,"lms_logins":59,"avg_study_hours":3.73,"avg_distraction_hours":2.78,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.005,"recommended_actions":"No action needed","att":[84.0,77.5,74.4,75.0,79.1],"mk":[60,66,58,71,71]},
+  {"student_id":"STU00002","name":"Student_2","department":"Civil","semester":2,"performance_score":66.19,"performance_band":"Good","avg_attendance":80.41,"cgpa":5.2,"assignment_completion":84.45,"avg_internal":22.0,"lms_logins":65,"avg_study_hours":4.03,"avg_distraction_hours":2.08,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.135,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[86.7,74.4,91.4,73.0,76.6],"mk":[61,44,65,53,63]},
+  {"student_id":"STU00005","name":"Student_5","department":"Electronics","semester":6,"performance_score":28.43,"performance_band":"Poor","avg_attendance":51.96,"cgpa":0.0,"assignment_completion":43.05,"avg_internal":9.2,"lms_logins":20,"avg_study_hours":0.95,"avg_distraction_hours":4.4,"subjects_failed":5,"final_risk":"High","ml_risk_probability":0.939,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[54.4,50.0,51.2,54.3,50.0],"mk":[35,21,24,16,18]},
+  {"student_id":"STU00016","name":"Student_16","department":"Computer Science","semester":3,"performance_score":64.9,"performance_band":"Average","avg_attendance":79.11,"cgpa":5.2,"assignment_completion":71.44,"avg_internal":22.8,"lms_logins":55,"avg_study_hours":3.77,"avg_distraction_hours":2.32,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.0,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[76.6,79.5,86.5,80.0,73.0],"mk":[41,57,70,42,48]},
+  {"student_id":"STU00024","name":"Student_24","department":"Mechanical","semester":8,"performance_score":70.6,"performance_band":"Good","avg_attendance":74.91,"cgpa":6.8,"assignment_completion":75.28,"avg_internal":26.8,"lms_logins":69,"avg_study_hours":3.16,"avg_distraction_hours":2.57,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.0,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks","att":[71.4,69.2,72.3,81.1,80.5],"mk":[82,57,72,65,57]},
+  {"student_id":"STU00041","name":"Student_41","department":"Information Technology","semester":1,"performance_score":60.05,"performance_band":"Average","avg_attendance":65.55,"cgpa":5.6,"assignment_completion":61.74,"avg_internal":23.4,"lms_logins":35,"avg_study_hours":2.29,"avg_distraction_hours":3.56,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.01,"recommended_actions":"Attendance low; counsel student, focus on Machine Learning | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[56.0,73.5,67.4,54.8,76.1],"mk":[63,61,67,45,57]},
+  {"student_id":"STU00045","name":"Student_45","department":"Mechanical","semester":2,"performance_score":71.77,"performance_band":"Good","avg_attendance":81.47,"cgpa":6.8,"assignment_completion":68.08,"avg_internal":26.8,"lms_logins":48,"avg_study_hours":3.55,"avg_distraction_hours":2.87,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.005,"recommended_actions":"No action needed","att":[71.4,82.5,81.6,90.2,81.6],"mk":[62,71,64,63,78]},
+  {"student_id":"STU00074","name":"Student_74","department":"Civil","semester":1,"performance_score":64.72,"performance_band":"Average","avg_attendance":70.58,"cgpa":6.0,"assignment_completion":64.4,"avg_internal":27.4,"lms_logins":53,"avg_study_hours":3.16,"avg_distraction_hours":2.54,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.107,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks","att":[77.5,65.8,70.3,73.3,66.0],"mk":[61,66,64,64,65]},
+  {"student_id":"STU00092","name":"Student_92","department":"Electronics","semester":4,"performance_score":71.74,"performance_band":"Good","avg_attendance":81.3,"cgpa":6.4,"assignment_completion":78.89,"avg_internal":25.6,"lms_logins":55,"avg_study_hours":4.19,"avg_distraction_hours":2.28,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.012,"recommended_actions":"No action needed","att":[79.0,77.3,85.7,83.3,81.2],"mk":[72,66,56,66,62]},
+  {"student_id":"STU00094","name":"Student_94","department":"Information Technology","semester":7,"performance_score":56.39,"performance_band":"Average","avg_attendance":64.35,"cgpa":5.2,"assignment_completion":53.05,"avg_internal":23.0,"lms_logins":34,"avg_study_hours":1.68,"avg_distraction_hours":3.43,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.034,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Assignments missing; send reminders and set weekly submission check-ins | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[79.1,66.0,57.9,66.7,52.2],"mk":[58,53,66,44,62]},
+  {"student_id":"STU00096","name":"Student_96","department":"Information Technology","semester":4,"performance_score":48.78,"performance_band":"Poor","avg_attendance":69.41,"cgpa":2.4,"assignment_completion":67.26,"avg_internal":17.6,"lms_logins":35,"avg_study_hours":3.02,"avg_distraction_hours":3.34,"subjects_failed":2,"final_risk":"High","ml_risk_probability":0.871,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Failing/at-risk subject; arrange remedial classes for Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[74.5,62.2,70.3,66.7,73.5],"mk":[48,39,37,45,50]},
+  {"student_id":"STU00103","name":"Student_103","department":"Electronics","semester":4,"performance_score":81.59,"performance_band":"Excellent","avg_attendance":88.31,"cgpa":8.0,"assignment_completion":83.33,"avg_internal":32.2,"lms_logins":96,"avg_study_hours":5.14,"avg_distraction_hours":1.65,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[89.4,81.0,84.0,100.0,87.2],"mk":[83,71,79,75,80]},
+  {"student_id":"STU00106","name":"Student_106","department":"Information Technology","semester":1,"performance_score":73.97,"performance_band":"Good","avg_attendance":81.84,"cgpa":6.8,"assignment_completion":83.07,"avg_internal":27.4,"lms_logins":73,"avg_study_hours":4.34,"avg_distraction_hours":1.83,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[91.8,74.0,86.0,73.2,84.2],"mk":[73,42,70,69,71]},
+  {"student_id":"STU00108","name":"Student_108","department":"Civil","semester":3,"performance_score":68.46,"performance_band":"Good","avg_attendance":80.1,"cgpa":6.0,"assignment_completion":77.36,"avg_internal":24.4,"lms_logins":64,"avg_study_hours":4.39,"avg_distraction_hours":2.11,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.019,"recommended_actions":"No action needed","att":[82.0,81.6,80.0,71.8,85.1],"mk":[64,63,67,64,63]},
+  {"student_id":"STU00115","name":"Student_115","department":"Information Technology","semester":2,"performance_score":61.26,"performance_band":"Average","avg_attendance":73.87,"cgpa":5.2,"assignment_completion":63.39,"avg_internal":22.4,"lms_logins":41,"avg_study_hours":3.27,"avg_distraction_hours":2.76,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.012,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[77.6,76.9,71.4,79.6,63.9],"mk":[55,44,54,58,61]},
+  {"student_id":"STU00128","name":"Student_128","department":"Information Technology","semester":2,"performance_score":73.31,"performance_band":"Good","avg_attendance":82.99,"cgpa":6.8,"assignment_completion":82.33,"avg_internal":26.0,"lms_logins":61,"avg_study_hours":4.48,"avg_distraction_hours":1.9,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.012,"recommended_actions":"No action needed","att":[86.1,75.7,82.0,80.4,90.7],"mk":[60,71,59,58,70]},
+  {"student_id":"STU00138","name":"Student_138","department":"Computer Science","semester":2,"performance_score":68.54,"performance_band":"Good","avg_attendance":71.22,"cgpa":6.8,"assignment_completion":70.23,"avg_internal":26.2,"lms_logins":41,"avg_study_hours":2.87,"avg_distraction_hours":3.3,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.016,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[65.1,59.5,76.9,82.5,72.1],"mk":[60,73,70,63,64]},
+  {"student_id":"STU00157","name":"Student_157","department":"Information Technology","semester":5,"performance_score":60.9,"performance_band":"Average","avg_attendance":66.59,"cgpa":5.6,"assignment_completion":60.96,"avg_internal":24.6,"lms_logins":47,"avg_study_hours":2.93,"avg_distraction_hours":3.0,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.046,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | CGPA below 6; assign faculty mentor","att":[63.3,69.4,67.5,67.5,65.2],"mk":[59,61,67,53,58]},
+  {"student_id":"STU00183","name":"Student_183","department":"Mechanical","semester":6,"performance_score":78.82,"performance_band":"Good","avg_attendance":90.98,"cgpa":7.2,"assignment_completion":85.06,"avg_internal":27.0,"lms_logins":73,"avg_study_hours":5.03,"avg_distraction_hours":1.95,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[85.7,92.0,98.0,95.2,84.0],"mk":[65,65,71,71,81]},
+  {"student_id":"STU00184","name":"Student_184","department":"Information Technology","semester":7,"performance_score":76.08,"performance_band":"Good","avg_attendance":78.23,"cgpa":7.6,"assignment_completion":78.48,"avg_internal":29.2,"lms_logins":57,"avg_study_hours":4.31,"avg_distraction_hours":2.07,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[86.0,78.7,80.6,79.2,66.7],"mk":[71,89,67,68,78]},
+  {"student_id":"STU00190","name":"Student_190","department":"Information Technology","semester":3,"performance_score":74.54,"performance_band":"Good","avg_attendance":78.58,"cgpa":6.8,"assignment_completion":86.18,"avg_internal":27.2,"lms_logins":79,"avg_study_hours":4.55,"avg_distraction_hours":2.34,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[89.5,80.5,79.6,69.6,73.8],"mk":[69,66,79,61,78]},
+  {"student_id":"STU00192","name":"Student_192","department":"Information Technology","semester":7,"performance_score":69.71,"performance_band":"Good","avg_attendance":77.99,"cgpa":6.4,"assignment_completion":77.56,"avg_internal":26.6,"lms_logins":43,"avg_study_hours":2.86,"avg_distraction_hours":2.32,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.012,"recommended_actions":"Low LMS engagement; encourage use of online resources","att":[88.0,84.0,72.2,75.0,70.7],"mk":[71,83,68,54,60]},
+  {"student_id":"STU00193","name":"Student_193","department":"Information Technology","semester":4,"performance_score":74.02,"performance_band":"Good","avg_attendance":84.98,"cgpa":6.8,"assignment_completion":83.7,"avg_internal":24.6,"lms_logins":66,"avg_study_hours":4.02,"avg_distraction_hours":1.72,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.047,"recommended_actions":"No action needed","att":[77.3,80.6,91.9,85.4,89.8],"mk":[63,59,59,71,73]},
+  {"student_id":"STU00196","name":"Student_196","department":"Mechanical","semester":1,"performance_score":54.09,"performance_band":"Average","avg_attendance":62.78,"cgpa":4.4,"assignment_completion":66.33,"avg_internal":19.0,"lms_logins":41,"avg_study_hours":2.76,"avg_distraction_hours":2.92,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.502,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[64.4,58.3,61.1,67.5,62.5],"mk":[51,41,56,53,46]},
+  {"student_id":"STU00197","name":"Student_197","department":"Computer Science","semester":7,"performance_score":55.14,"performance_band":"Average","avg_attendance":62.62,"cgpa":5.2,"assignment_completion":53.89,"avg_internal":22.0,"lms_logins":40,"avg_study_hours":2.12,"avg_distraction_hours":3.17,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.252,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Assignments missing; send reminders and set weekly submission check-ins | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[59.2,60.5,68.3,63.6,61.5],"mk":[42,56,60,52,60]},
+  {"student_id":"STU00212","name":"Student_212","department":"Information Technology","semester":6,"performance_score":62.77,"performance_band":"Average","avg_attendance":79.52,"cgpa":5.2,"assignment_completion":72.21,"avg_internal":19.0,"lms_logins":60,"avg_study_hours":3.64,"avg_distraction_hours":2.58,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.249,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[74.4,88.6,73.7,78.3,82.6],"mk":[61,59,60,40,46]},
+  {"student_id":"STU00238","name":"Student_238","department":"Electronics","semester":1,"performance_score":77.02,"performance_band":"Good","avg_attendance":88.85,"cgpa":7.2,"assignment_completion":83.46,"avg_internal":26.0,"lms_logins":70,"avg_study_hours":4.7,"avg_distraction_hours":1.82,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[91.3,93.0,90.5,85.0,84.4],"mk":[82,56,65,71,72]},
+  {"student_id":"STU00240","name":"Student_240","department":"Mechanical","semester":2,"performance_score":41.1,"performance_band":"Poor","avg_attendance":58.77,"cgpa":2.0,"assignment_completion":50.5,"avg_internal":16.4,"lms_logins":27,"avg_study_hours":1.71,"avg_distraction_hours":3.79,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.966,"recommended_actions":"Attendance low; counsel student, focus on Machine Learning | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Machine Learning | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[65.8,59.1,58.3,54.6,56.1],"mk":[57,45,36,24,37]},
+  {"student_id":"STU00247","name":"Student_247","department":"Information Technology","semester":1,"performance_score":77.52,"performance_band":"Good","avg_attendance":92.45,"cgpa":7.2,"assignment_completion":81.03,"avg_internal":27.2,"lms_logins":71,"avg_study_hours":5.18,"avg_distraction_hours":1.66,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.024,"recommended_actions":"No action needed","att":[94.4,92.7,90.2,90.0,94.9],"mk":[65,75,87,49,75]},
+  {"student_id":"STU00253","name":"Student_253","department":"Mechanical","semester":7,"performance_score":78.82,"performance_band":"Good","avg_attendance":82.05,"cgpa":8.0,"assignment_completion":73.73,"avg_internal":30.2,"lms_logins":57,"avg_study_hours":4.02,"avg_distraction_hours":3.05,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.019,"recommended_actions":"No action needed","att":[84.8,82.9,80.0,82.0,80.6],"mk":[86,62,86,75,66]},
+  {"student_id":"STU00263","name":"Student_263","department":"Civil","semester":5,"performance_score":78.58,"performance_band":"Good","avg_attendance":89.73,"cgpa":7.2,"assignment_completion":84.28,"avg_internal":28.6,"lms_logins":71,"avg_study_hours":4.26,"avg_distraction_hours":2.22,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[81.8,90.5,87.8,100.0,88.6],"mk":[81,78,75,68,63]},
+  {"student_id":"STU00272","name":"Student_272","department":"Civil","semester":3,"performance_score":90.24,"performance_band":"Excellent","avg_attendance":90.95,"cgpa":9.2,"assignment_completion":98.18,"avg_internal":34.8,"lms_logins":98,"avg_study_hours":5.34,"avg_distraction_hours":1.32,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[96.0,92.3,94.4,84.0,88.0],"mk":[75,97,91,88,80]},
+  {"student_id":"STU00274","name":"Student_274","department":"Electronics","semester":7,"performance_score":98.03,"performance_band":"Excellent","avg_attendance":98.6,"cgpa":10.0,"assignment_completion":100.0,"avg_internal":37.6,"lms_logins":155,"avg_study_hours":6.3,"avg_distraction_hours":0.83,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[100.0,100.0,100.0,95.2,97.8],"mk":[97,90,100,99,91]},
+  {"student_id":"STU00278","name":"Student_278","department":"Electronics","semester":5,"performance_score":62.26,"performance_band":"Average","avg_attendance":77.76,"cgpa":5.2,"assignment_completion":64.0,"avg_internal":22.6,"lms_logins":60,"avg_study_hours":3.2,"avg_distraction_hours":2.25,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.003,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[80.5,73.8,84.0,68.3,82.2],"mk":[47,55,54,56,58]},
+  {"student_id":"STU00287","name":"Student_287","department":"Computer Science","semester":2,"performance_score":74.34,"performance_band":"Good","avg_attendance":87.97,"cgpa":6.8,"assignment_completion":73.89,"avg_internal":27.4,"lms_logins":67,"avg_study_hours":3.93,"avg_distraction_hours":2.24,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.008,"recommended_actions":"No action needed","att":[73.7,88.9,83.8,93.5,100.0],"mk":[57,69,62,73,84]},
+  {"student_id":"STU00296","name":"Student_296","department":"Electronics","semester":8,"performance_score":71.67,"performance_band":"Good","avg_attendance":80.46,"cgpa":6.8,"assignment_completion":74.95,"avg_internal":24.6,"lms_logins":57,"avg_study_hours":3.4,"avg_distraction_hours":2.76,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[77.1,81.1,77.5,81.0,85.7],"mk":[76,66,64,66,78]},
+  {"student_id":"STU00298","name":"Student_298","department":"Computer Science","semester":2,"performance_score":72.8,"performance_band":"Good","avg_attendance":87.47,"cgpa":6.4,"assignment_completion":74.2,"avg_internal":24.2,"lms_logins":77,"avg_study_hours":4.62,"avg_distraction_hours":2.3,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.02,"recommended_actions":"No action needed","att":[95.0,93.0,95.2,77.5,76.6],"mk":[49,72,64,57,70]},
+  {"student_id":"STU00301","name":"Student_301","department":"Computer Science","semester":5,"performance_score":73.43,"performance_band":"Good","avg_attendance":81.43,"cgpa":6.8,"assignment_completion":77.5,"avg_internal":27.0,"lms_logins":74,"avg_study_hours":3.64,"avg_distraction_hours":2.61,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[86.8,76.1,83.0,84.6,76.6],"mk":[71,65,69,66,70]},
+  {"student_id":"STU00312","name":"Student_312","department":"Civil","semester":6,"performance_score":69.46,"performance_band":"Good","avg_attendance":78.19,"cgpa":6.4,"assignment_completion":73.89,"avg_internal":25.2,"lms_logins":62,"avg_study_hours":3.43,"avg_distraction_hours":3.0,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.019,"recommended_actions":"No action needed","att":[77.8,83.3,77.8,78.6,73.5],"mk":[68,65,68,78,55]},
+  {"student_id":"STU00316","name":"Student_316","department":"Mechanical","semester":8,"performance_score":73.18,"performance_band":"Good","avg_attendance":79.39,"cgpa":7.2,"assignment_completion":76.03,"avg_internal":28.2,"lms_logins":59,"avg_study_hours":3.8,"avg_distraction_hours":2.32,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.032,"recommended_actions":"No action needed","att":[85.7,78.3,65.9,88.1,79.0],"mk":[83,64,71,71,65]},
+  {"student_id":"STU00325","name":"Student_325","department":"Electronics","semester":8,"performance_score":69.72,"performance_band":"Good","avg_attendance":72.28,"cgpa":6.8,"assignment_completion":64.12,"avg_internal":30.0,"lms_logins":38,"avg_study_hours":2.81,"avg_distraction_hours":3.25,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.007,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[77.5,73.2,72.0,72.7,66.0],"mk":[62,84,78,68,65]},
+  {"student_id":"STU00335","name":"Student_335","department":"Computer Science","semester":8,"performance_score":63.81,"performance_band":"Average","avg_attendance":74.55,"cgpa":5.2,"assignment_completion":68.05,"avg_internal":24.6,"lms_logins":34,"avg_study_hours":3.56,"avg_distraction_hours":3.4,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.006,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[71.4,76.2,73.0,79.2,73.0],"mk":[53,51,54,61,75]},
+  {"student_id":"STU00337","name":"Student_337","department":"Mechanical","semester":1,"performance_score":59.79,"performance_band":"Average","avg_attendance":74.86,"cgpa":4.8,"assignment_completion":68.87,"avg_internal":18.4,"lms_logins":45,"avg_study_hours":3.29,"avg_distraction_hours":2.72,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.382,"recommended_actions":"Attendance low; counsel student, focus on Machine Learning | CGPA below 6; assign faculty mentor","att":[76.1,76.6,77.1,65.0,79.5],"mk":[66,50,48,55,49]},
+  {"student_id":"STU00345","name":"Student_345","department":"Information Technology","semester":2,"performance_score":87.07,"performance_band":"Excellent","avg_attendance":89.86,"cgpa":8.8,"assignment_completion":89.09,"avg_internal":34.4,"lms_logins":81,"avg_study_hours":4.65,"avg_distraction_hours":2.51,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[80.8,92.3,93.0,94.7,88.4],"mk":[73,78,88,89,81]},
+  {"student_id":"STU00348","name":"Student_348","department":"Civil","semester":3,"performance_score":88.33,"performance_band":"Excellent","avg_attendance":94.45,"cgpa":8.8,"assignment_completion":87.35,"avg_internal":34.4,"lms_logins":89,"avg_study_hours":4.98,"avg_distraction_hours":1.57,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[87.2,97.9,100.0,87.2,100.0],"mk":[88,79,94,76,84]},
+  {"student_id":"STU00354","name":"Student_354","department":"Information Technology","semester":2,"performance_score":78.01,"performance_band":"Good","avg_attendance":83.49,"cgpa":7.6,"assignment_completion":77.45,"avg_internal":31.0,"lms_logins":69,"avg_study_hours":4.33,"avg_distraction_hours":2.3,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[80.8,83.8,75.6,91.9,85.4],"mk":[71,82,55,84,74]},
+  {"student_id":"STU00356","name":"Student_356","department":"Electronics","semester":3,"performance_score":73.11,"performance_band":"Good","avg_attendance":84.65,"cgpa":6.8,"assignment_completion":77.23,"avg_internal":26.2,"lms_logins":62,"avg_study_hours":3.77,"avg_distraction_hours":2.14,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.058,"recommended_actions":"No action needed","att":[79.6,82.6,90.0,86.0,85.1],"mk":[77,70,55,60,68]},
+  {"student_id":"STU00361","name":"Student_361","department":"Computer Science","semester":3,"performance_score":60.93,"performance_band":"Average","avg_attendance":74.28,"cgpa":5.2,"assignment_completion":64.4,"avg_internal":21.8,"lms_logins":46,"avg_study_hours":2.39,"avg_distraction_hours":3.22,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.111,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | CGPA below 6; assign faculty mentor | High distraction time; time-management coaching","att":[72.5,64.0,85.7,78.7,70.4],"mk":[64,51,48,47,76]},
+  {"student_id":"STU00366","name":"Student_366","department":"Electronics","semester":7,"performance_score":96.39,"performance_band":"Excellent","avg_attendance":97.68,"cgpa":10.0,"assignment_completion":95.28,"avg_internal":38.6,"lms_logins":112,"avg_study_hours":5.64,"avg_distraction_hours":1.27,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[100.0,93.9,100.0,97.4,97.1],"mk":[99,100,92,94,93]},
+  {"student_id":"STU00370","name":"Student_370","department":"Information Technology","semester":4,"performance_score":76.7,"performance_band":"Good","avg_attendance":80.74,"cgpa":7.6,"assignment_completion":74.83,"avg_internal":28.8,"lms_logins":65,"avg_study_hours":3.93,"avg_distraction_hours":2.54,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.002,"recommended_actions":"No action needed","att":[82.9,82.5,80.0,83.3,75.0],"mk":[73,87,67,66,78]},
+  {"student_id":"STU00378","name":"Student_378","department":"Computer Science","semester":2,"performance_score":47.14,"performance_band":"Poor","avg_attendance":70.05,"cgpa":2.4,"assignment_completion":56.58,"avg_internal":16.2,"lms_logins":37,"avg_study_hours":2.2,"avg_distraction_hours":2.72,"subjects_failed":2,"final_risk":"High","ml_risk_probability":0.972,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Computer Networks | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[65.8,68.1,76.1,69.4,70.8],"mk":[35,34,46,41,54]},
+  {"student_id":"STU00379","name":"Student_379","department":"Mechanical","semester":4,"performance_score":86.42,"performance_band":"Excellent","avg_attendance":86.21,"cgpa":9.2,"assignment_completion":85.25,"avg_internal":31.4,"lms_logins":72,"avg_study_hours":4.87,"avg_distraction_hours":2.46,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[84.8,91.7,85.4,85.4,83.8],"mk":[88,70,92,73,89]},
+  {"student_id":"STU00389","name":"Student_389","department":"Information Technology","semester":7,"performance_score":49.7,"performance_band":"Poor","avg_attendance":60.16,"cgpa":4.4,"assignment_completion":49.06,"avg_internal":18.4,"lms_logins":27,"avg_study_hours":1.48,"avg_distraction_hours":3.41,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.632,"recommended_actions":"Attendance low; counsel student, focus on Database Management | Assignments missing; send reminders and set weekly submission check-ins | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[54.3,62.5,51.4,71.4,61.2],"mk":[50,44,44,46,55]},
+  {"student_id":"STU00395","name":"Student_395","department":"Information Technology","semester":8,"performance_score":75.09,"performance_band":"Good","avg_attendance":82.59,"cgpa":7.2,"assignment_completion":76.0,"avg_internal":27.6,"lms_logins":65,"avg_study_hours":3.89,"avg_distraction_hours":2.62,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.007,"recommended_actions":"No action needed","att":[80.0,89.8,78.7,75.6,88.9],"mk":[77,61,66,73,75]},
+  {"student_id":"STU00402","name":"Student_402","department":"Civil","semester":6,"performance_score":70.66,"performance_band":"Good","avg_attendance":81.4,"cgpa":6.0,"assignment_completion":71.5,"avg_internal":27.0,"lms_logins":78,"avg_study_hours":3.92,"avg_distraction_hours":2.53,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.007,"recommended_actions":"No action needed","att":[82.6,79.6,77.6,78.4,88.9],"mk":[58,61,68,66,67]},
+  {"student_id":"STU00408","name":"Student_408","department":"Civil","semester":7,"performance_score":67.11,"performance_band":"Good","avg_attendance":72.35,"cgpa":6.4,"assignment_completion":65.9,"avg_internal":27.2,"lms_logins":35,"avg_study_hours":3.23,"avg_distraction_hours":3.05,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.003,"recommended_actions":"Attendance low; counsel student, focus on Database Management | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[73.8,73.3,69.6,73.0,72.1],"mk":[64,65,79,64,67]},
+  {"student_id":"STU00409","name":"Student_409","department":"Computer Science","semester":6,"performance_score":45.62,"performance_band":"Poor","avg_attendance":67.94,"cgpa":1.6,"assignment_completion":68.55,"avg_internal":16.8,"lms_logins":36,"avg_study_hours":3.12,"avg_distraction_hours":2.92,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.82,"recommended_actions":"Attendance low; counsel student, focus on Big Data Analytics | Failing/at-risk subject; arrange remedial classes for Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[63.9,65.1,70.3,68.1,72.3],"mk":[38,44,37,39,41]},
+  {"student_id":"STU00410","name":"Student_410","department":"Mechanical","semester":4,"performance_score":42.16,"performance_band":"Poor","avg_attendance":67.59,"cgpa":1.6,"assignment_completion":53.94,"avg_internal":14.8,"lms_logins":32,"avg_study_hours":1.73,"avg_distraction_hours":3.0,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.976,"recommended_actions":"Attendance low; counsel student, focus on Database Management | Assignments missing; send reminders and set weekly submission check-ins | Failing/at-risk subject; arrange remedial classes for Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[71.4,68.3,61.5,66.0,70.7],"mk":[36,40,42,27,24]},
+  {"student_id":"STU00412","name":"Student_412","department":"Electronics","semester":2,"performance_score":43.23,"performance_band":"Poor","avg_attendance":71.82,"cgpa":0.8,"assignment_completion":63.8,"avg_internal":14.4,"lms_logins":33,"avg_study_hours":2.72,"avg_distraction_hours":2.61,"subjects_failed":4,"final_risk":"High","ml_risk_probability":0.905,"recommended_actions":"Attendance low; counsel student, focus on Database Management | Failing/at-risk subject; arrange remedial classes for Big Data Analytics | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[73.7,72.1,70.8,71.4,71.0],"mk":[32,38,34,33,42]},
+  {"student_id":"STU00416","name":"Student_416","department":"Civil","semester":6,"performance_score":88.45,"performance_band":"Excellent","avg_attendance":90.93,"cgpa":8.8,"assignment_completion":98.0,"avg_internal":34.4,"lms_logins":95,"avg_study_hours":4.96,"avg_distraction_hours":1.55,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[81.0,96.0,93.0,94.0,90.7],"mk":[84,84,78,87,96]},
+  {"student_id":"STU00422","name":"Student_422","department":"Mechanical","semester":5,"performance_score":58.55,"performance_band":"Average","avg_attendance":68.16,"cgpa":5.2,"assignment_completion":62.24,"avg_internal":21.4,"lms_logins":33,"avg_study_hours":2.47,"avg_distraction_hours":2.94,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.216,"recommended_actions":"Attendance low; counsel student, focus on Operating Systems | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources","att":[66.7,68.1,70.8,77.8,57.4],"mk":[43,67,60,56,54]},
+  {"student_id":"STU00426","name":"Student_426","department":"Electronics","semester":1,"performance_score":82.55,"performance_band":"Excellent","avg_attendance":93.92,"cgpa":7.2,"assignment_completion":96.11,"avg_internal":29.6,"lms_logins":100,"avg_study_hours":5.1,"avg_distraction_hours":1.2,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[97.8,97.6,95.8,88.4,90.0],"mk":[69,80,83,70,58]},
+  {"student_id":"STU00428","name":"Student_428","department":"Computer Science","semester":8,"performance_score":90.22,"performance_band":"Excellent","avg_attendance":88.79,"cgpa":9.2,"assignment_completion":95.56,"avg_internal":34.8,"lms_logins":104,"avg_study_hours":4.78,"avg_distraction_hours":1.97,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[82.6,91.9,93.2,89.8,86.5],"mk":[80,94,93,82,85]},
+  {"student_id":"STU00429","name":"Student_429","department":"Civil","semester":4,"performance_score":57.09,"performance_band":"Average","avg_attendance":74.52,"cgpa":4.4,"assignment_completion":64.25,"avg_internal":20.0,"lms_logins":44,"avg_study_hours":2.81,"avg_distraction_hours":2.97,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.374,"recommended_actions":"Attendance low; counsel student, focus on Database Management | CGPA below 6; assign faculty mentor","att":[77.3,76.0,66.7,80.6,72.1],"mk":[52,51,44,43,55]},
+  {"student_id":"STU00437","name":"Student_437","department":"Electronics","semester":5,"performance_score":54.6,"performance_band":"Average","avg_attendance":61.69,"cgpa":4.8,"assignment_completion":61.89,"avg_internal":21.8,"lms_logins":43,"avg_study_hours":2.77,"avg_distraction_hours":3.52,"subjects_failed":0,"final_risk":"High","ml_risk_probability":0.224,"recommended_actions":"Attendance low; counsel student, focus on Database Management | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[66.0,63.9,57.1,63.3,58.1],"mk":[67,60,41,48,52]},
+  {"student_id":"STU00439","name":"Student_439","department":"Computer Science","semester":3,"performance_score":70.69,"performance_band":"Good","avg_attendance":83.27,"cgpa":6.0,"assignment_completion":82.78,"avg_internal":25.8,"lms_logins":68,"avg_study_hours":4.22,"avg_distraction_hours":1.96,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.01,"recommended_actions":"No action needed","att":[83.0,79.6,91.4,84.6,77.8],"mk":[59,73,66,52,68]},
+  {"student_id":"STU00449","name":"Student_449","department":"Electronics","semester":5,"performance_score":81.02,"performance_band":"Excellent","avg_attendance":85.04,"cgpa":8.0,"assignment_completion":86.94,"avg_internal":30.0,"lms_logins":100,"avg_study_hours":4.67,"avg_distraction_hours":2.31,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[86.5,75.5,87.8,85.7,89.7],"mk":[84,87,79,69,72]},
+  {"student_id":"STU00463","name":"Student_463","department":"Mechanical","semester":1,"performance_score":42.32,"performance_band":"Poor","avg_attendance":63.8,"cgpa":1.6,"assignment_completion":60.82,"avg_internal":14.8,"lms_logins":26,"avg_study_hours":1.62,"avg_distraction_hours":3.63,"subjects_failed":3,"final_risk":"High","ml_risk_probability":0.982,"recommended_actions":"Attendance low; counsel student, focus on Computer Networks | Failing/at-risk subject; arrange remedial classes for Computer Networks | CGPA below 6; assign faculty mentor | Low LMS engagement; encourage use of online resources | High distraction time; time-management coaching","att":[64.9,56.5,64.3,73.3,60.0],"mk":[40,22,51,31,28]},
+  {"student_id":"STU00474","name":"Student_474","department":"Mechanical","semester":4,"performance_score":81.06,"performance_band":"Excellent","avg_attendance":90.12,"cgpa":8.0,"assignment_completion":78.77,"avg_internal":29.6,"lms_logins":67,"avg_study_hours":4.56,"avg_distraction_hours":2.39,"subjects_failed":0,"final_risk":"Low","ml_risk_probability":0.0,"recommended_actions":"No action needed","att":[85.7,82.6,95.6,88.9,97.8],"mk":[79,63,87,81,73]},
+  {"student_id":"STU00498","name":"Student_498","department":"Computer Science","semester":5,"performance_score":67.61,"performance_band":"Good","avg_attendance":80.54,"cgpa":5.6,"assignment_completion":81.86,"avg_internal":23.2,"lms_logins":57,"avg_study_hours":3.71,"avg_distraction_hours":2.79,"subjects_failed":0,"final_risk":"Medium","ml_risk_probability":0.183,"recommended_actions":"CGPA below 6; assign faculty mentor","att":[76.7,80.0,84.8,82.9,78.3],"mk":[55,66,57,51,55]}
 ]
-
-NUMERIC_FIELDS = set(FIELDS[1:-1])
-
-
-def load_students():
-    with open(DATA_FILE, encoding="utf-8", newline="") as f:
-        return list(csv.DictReader(f, fieldnames=FIELDS))
-
-
-def clean_student(row):
-    result = {}
-
-    for key, value in row.items():
-        if key in NUMERIC_FIELDS:
-            try:
-                number = float(value)
-                result[key] = int(number) if number.is_integer() else number
-            except (ValueError, TypeError):
-                result[key] = value
-        else:
-            result[key] = value.strip()
-
-    return result
-
 
 @app.get("/")
 def home():
     return jsonify({
-        "application": "Student Risk Analytics API",
+        "application": "EduRisk - Student Performance & Risk Intelligence API",
         "status": "running",
         "data_source": str(DATA_FILE),
+        "total_students": len(STUDENTS),
         "endpoints": [
             "/api/summary",
             "/api/risk-distribution",
             "/api/risk-analysis",
             "/api/students",
-            "/api/students/<student_id>"
+            "/api/students/<student_id>",
+            "/api/alerts",
+            "/api/model-insights",
+            "/api/analytics",
+            "/api/export-csv"
         ]
     })
 
-
 @app.get("/api/summary")
 def summary():
-    students = load_students()
-
-    counts = {
-        "High": 0,
-        "Medium": 0,
-        "Low": 0
-    }
-
-    for student in students:
-        risk = student["risk_level"].strip()
-
-        if risk in counts:
-            counts[risk] += 1
-
-    total = len(students)
+    counts = {"High": 0, "Medium": 0, "Low": 0}
+    tot_perf = 0.0
+    tot_att = 0.0
+    
+    for s in STUDENTS:
+        risk = s["final_risk"]
+        counts[risk] = counts.get(risk, 0) + 1
+        tot_perf += s["performance_score"]
+        tot_att += s["avg_attendance"]
+        
+    total = len(STUDENTS)
     attention = counts["High"] + counts["Medium"]
-
+    
     return jsonify({
         "total_students": total,
         "high_risk": counts["High"],
         "medium_risk": counts["Medium"],
         "low_risk": counts["Low"],
         "high_medium_risk": attention,
-        "high_medium_percentage": round(
-            attention / total * 100, 2
-        ) if total else 0
+        "high_medium_percentage": round(attention / total * 100, 2) if total else 0,
+        "avg_performance_score": round(tot_perf / total, 2) if total else 0,
+        "avg_attendance": round(tot_att / total, 2) if total else 0
     })
-
 
 @app.get("/api/risk-distribution")
 def risk_distribution():
-    students = load_students()
-
-    counts = {
-        "High": 0,
-        "Medium": 0,
-        "Low": 0
-    }
-
-    for student in students:
-        risk = student["risk_level"].strip()
-
-        if risk in counts:
-            counts[risk] += 1
-
-    total = len(students)
-
+    counts = {"High": 0, "Medium": 0, "Low": 0}
+    for s in STUDENTS:
+        counts[s["final_risk"]] += 1
+    total = len(STUDENTS)
+    
     return jsonify([
         {
-            "risk": risk,
-            "students": counts[risk],
-            "percentage": round(
-                counts[risk] / total * 100, 2
-            ) if total else 0
+            "risk": r,
+            "students": counts[r],
+            "percentage": round(counts[r] / total * 100, 2) if total else 0
         }
-        for risk in ["High", "Medium", "Low"]
+        for r in ["High", "Medium", "Low"]
     ])
-
 
 @app.get("/api/risk-analysis")
 def risk_analysis():
-    students = load_students()
-
-    groups = {
-        "High": [],
-        "Medium": [],
-        "Low": []
-    }
-
-    for student in students:
-        risk = student["risk_level"].strip()
-
-        if risk in groups:
-            groups[risk].append(student)
-
-    metrics = {
-        "avg_attendance": "attendance",
-        "avg_assignment_completion": "assignment_completion",
-        "avg_assignment_score": "assignment_score",
-        "previous_gpa": "gpa",
-        "study_hours_per_day": "study_hours_per_day",
-        "avg_study_consistency": "study_consistency",
-        "total_distraction_hours": "distraction_hours",
-        "total_logins": "lms_logins",
-        "total_video_minutes": "video_minutes",
-        "total_quiz_attempts": "quiz_attempts"
-    }
-
+    groups = {"High": [], "Medium": [], "Low": []}
+    for s in STUDENTS:
+        groups[s["final_risk"]].append(s)
+        
     result = []
-
-    for risk in ["High", "Medium", "Low"]:
-
-        item = {
-            "risk": risk,
-            "students": len(groups[risk])
-        }
-
-        for source, output in metrics.items():
-
-            values = [
-                float(student[source])
-                for student in groups[risk]
-            ]
-
-            item[output] = round(
-                sum(values) / len(values), 2
-            ) if values else 0
-
-        result.append(item)
-
+    for r in ["High", "Medium", "Low"]:
+        stus = groups[r]
+        n = len(stus) or 1
+        result.append({
+            "risk": r,
+            "students": len(stus),
+            "attendance": round(sum(s["avg_attendance"] for s in stus) / n, 2),
+            "assignment_completion": round(sum(s["assignment_completion"] for s in stus) / n, 2),
+            "gpa": round(sum(s["cgpa"] for s in stus) / n, 2),
+            "avg_internal": round(sum(s["avg_internal"] for s in stus) / n, 2),
+            "study_hours_per_day": round(sum(s["avg_study_hours"] for s in stus) / n, 2),
+            "distraction_hours": round(sum(s["avg_distraction_hours"] for s in stus) / n, 2),
+            "lms_logins": round(sum(s["lms_logins"] for s in stus) / n, 2)
+        })
     return jsonify(result)
-
 
 @app.get("/api/students")
 def student_list():
-
-    students = [
-        clean_student(student)
-        for student in load_students()
-    ]
-
     risk = request.args.get("risk", "").strip()
+    dept = request.args.get("department", "").strip()
     search = request.args.get("search", "").strip().lower()
-
-    try:
-        limit = min(
-            int(request.args.get("limit", 100)),
-            500
-        )
-    except ValueError:
-        limit = 100
-
+    
+    stus = list(STUDENTS)
     if risk:
-        students = [
-            student
-            for student in students
-            if student["risk_level"] == risk
-        ]
-
+        stus = [s for s in stus if s["final_risk"].lower() == risk.lower()]
+    if dept:
+        stus = [s for s in stus if s["department"].lower() == dept.lower()]
     if search:
-        students = [
-            student
-            for student in students
-            if search in student["student_id"].lower()
-        ]
-
+        stus = [s for s in stus if search in s["student_id"].lower() or search in s["name"].lower()]
+        
+    limit = request.args.get("limit", 500)
+    try:
+        limit = int(limit)
+    except ValueError:
+        limit = 500
+        
     return jsonify({
-        "count": len(students),
-        "students": students[:limit]
+        "count": len(stus),
+        "students": stus[:limit]
     })
-
 
 @app.get("/api/students/<student_id>")
 def student_detail(student_id):
-
     student_id = student_id.strip().upper()
-
-    students = [
-        clean_student(student)
-        for student in load_students()
-    ]
-
-    student = next(
-        (
-            student
-            for student in students
-            if student["student_id"] == student_id
-        ),
-        None
-    )
-
+    student = next((s for s in STUDENTS if s["student_id"].upper() == student_id), None)
     if not student:
-        return jsonify({
-            "error": "Student not found"
-        }), 404
-
+        return jsonify({"error": "Student not found"}), 404
     return jsonify(student)
 
+@app.get("/api/alerts")
+def alerts():
+    high_risk_students = [s for s in STUDENTS if s["final_risk"] == "High"]
+    high_risk_students.sort(key=lambda x: x["ml_risk_probability"], reverse=True)
+    return jsonify({
+        "count": len(high_risk_students),
+        "alerts": high_risk_students
+    })
+
+@app.get("/api/model-insights")
+def model_insights():
+    return jsonify(EDURISK_DATA)
+
+@app.get("/api/export-csv")
+def export_csv():
+    header = ["student_id", "name", "department", "semester", "final_risk", "performance_score", "avg_attendance", "cgpa", "assignment_completion", "ml_risk_probability"]
+    rows = [header]
+    for s in STUDENTS:
+        rows.append([
+            s["student_id"], s["name"], s["department"], str(s["semester"]),
+            s["final_risk"], str(s["performance_score"]), str(s["avg_attendance"]),
+            str(s["cgpa"]), str(s["assignment_completion"]), str(s["ml_risk_probability"])
+        ])
+    output = "\n".join([",".join(r) for r in rows])
+    return Response(output, mimetype="text/csv", headers={"Content-Disposition": "attachment;filename=students_risk_analytics.csv"})
 
 if __name__ == "__main__":
-
     print()
-    print("=" * 50)
-    print("STUDENT RISK ANALYTICS - FLASK API")
-    print("=" * 50)
-    print(f"Data file: {DATA_FILE}")
-    print("API: http://127.0.0.1:5000")
-    print("=" * 50)
+    print("=" * 60)
+    print("EDURISK STUDENT RISK ANALYTICS - FLASK BACKEND API")
+    print("=" * 60)
+    print("Server running on http://127.0.0.1:5000")
+    print("=" * 60)
     print()
-
-    app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True
-    )
+    app.run(host="127.0.0.1", port=5000, debug=True)
